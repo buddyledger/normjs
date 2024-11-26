@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Normal Distribution Application</title>
+    <!-- Include Plotly.js -->
+    <script src="https://cdn.plot.ly/plotly-2.24.1.min.js"></script>
+    <!-- Include jStat for statistical calculations -->
+    <script src="https://cdn.jsdelivr.net/npm/jstat@latest/dist/jstat.min.js"></script>
+    <!-- Include MathJax for rendering equations -->
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <!-- Basic styling -->
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .container { display: grid; grid-template-rows: auto 1fr auto; grid-gap: 20px; }
+        .inputs { display: flex; justify-content: space-between; gap: 20px; }
+        .inputs .group { display: flex; gap: 20px; }
+        .inputs div { display: flex; flex-direction: column; }
+        .quadrants { display: grid; grid-template-columns: 1fr 1fr; grid-gap: 20px; }
+        .quadrant { border: 1px solid #ccc; padding: 10px; overflow: auto; }
+        .equation { margin-top: 10px; }
+        .output { margin-top: 10px; font-weight: bold; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 4px; text-align: right; border: 1px solid #ddd; }
+        tr:nth-child(even) { background-color: #f9f9f9; }
+        td.highlight { background-color: #e0f7fa !important; }
+        .table-container { overflow-x: auto; }
+        .table-controls { display: flex; gap: 20px; margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Input Region -->
+        <div class="inputs">
+            <!-- Group Inputs for Standard Normal (Left side) -->
+            <div class="group">
+                <div>
+                    <label for="lower">Lower Confidence Interval (%)</label>
+                    <input type="number" id="lower" value="2.5" min="0" max="100" step="0.1">
+                </div>
+                <div>
+                    <label for="upper">Upper Confidence Interval (%)</label>
+                    <input type="number" id="upper" value="97.5" min="0" max="100" step="0.1">
+                </div>
+            </div>
+            <!-- Group Inputs for Scaled Normal (Right side) -->
+            <div class="group">
+                <div>
+                    <label for="mean">Mean (m)</label>
+                    <input type="number" id="mean" value="0" step="0.1">
+                </div>
+                <div>
+                    <label for="stddev">Standard Error (SE)</label>
+                    <input type="number" id="stddev" value="1" min="0.0001" step="0.1">
+                </div>
+                <div>
+                    <label for="x0">Null Hypothesis (X₀)</label>
+                    <input type="number" id="x0" value="0" step="0.1">
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content Region -->
+        <div class="quadrants">
+            <!-- Upper Left Quadrant: Standard Normal Plot -->
+            <div class="quadrant" id="standard-normal-plot">
+                <h3>Standard Normal Distribution</h3>
+                <div id="plot-standard"></div>
+                <div class="equation" id="equation-standard"></div>
+                <div class="output" id="output-standard"></div>
+            </div>
+            <!-- Upper Right Quadrant: Scaled Normal Plot -->
+            <div class="quadrant" id="scaled-normal-plot">
+                <h3>Scaled Normal Distribution</h3>
+                <div id="plot-scaled"></div>
+                <div class="equation" id="equation-scaled"></div>
+                <div class="output" id="output-scaled"></div>
+            </div>
+        </div>
+
+        <!-- Table Controls and Table -->
+        <div class="quadrant" id="combined-table">
+            <h3>Standard Normal Cumulative Table</h3>
+            <div class="table-controls">
+                <div>
+                    <label for="minZ">Minimum Z</label>
+                    <input type="number" id="minZ" value="-3" step="0.1">
+                </div>
+                <div>
+                    <label for="maxZ">Maximum Z</label>
+                    <input type="number" id="maxZ" value="3" step="0.1">
+                </div>
+            </div>
+            <div class="table-container">
+                <table id="table-combined">
+                    <!-- Table content will be inserted here -->
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript to handle interactions and plotting -->
+    <script>
+        // Wait for the DOM to be fully loaded
+        document.addEventListener('DOMContentLoaded', (event) => {
+            // Get references to input elements
+            const lowerInput = document.getElementById('lower');
+            const upperInput = document.getElementById('upper');
+            const meanInput = document.getElementById('mean');
+            const stddevInput = document.getElementById('stddev');
+            const x0Input = document.getElementById('x0');
+            const minZInput = document.getElementById('minZ');
+            const maxZInput = document.getElementById('maxZ');
+
+            // Event listeners for input changes
+            [lowerInput, upperInput, meanInput, stddevInput, x0Input, minZInput, maxZInput].forEach(input => {
+                input.addEventListener('input', updateAll);
+            });
+
+            function updateAll() {
+                const lowerPercent = parseFloat(lowerInput.value);
+                const upperPercent = parseFloat(upperInput.value);
+                const mean = parseFloat(meanInput.value);
+                const stddev = parseFloat(stddevInput.value);
+                const x0 = parseFloat(x0Input.value);
+                const minZ = parseFloat(minZInput.value);
+                const maxZ = parseFloat(maxZInput.value);
+
+                // Validate inputs
+                if (lowerPercent >= upperPercent || stddev <= 0) {
+                    alert('Please ensure that the lower confidence interval is less than the upper confidence interval and that the standard error is positive.');
+                    return;
+                }
+                if (minZ >= maxZ) {
+                    alert('Minimum Z must be less than Maximum Z.');
+                    return;
+                }
+
+                // Calculate Z-scores for standard normal distribution
+                const zLower = jStat.normal.inv(lowerPercent / 100, 0, 1);
+                const zUpper = jStat.normal.inv(upperPercent / 100, 0, 1);
+
+                // Calculate scaled values
+                const xLower = mean + zLower * stddev;
+                const xUpper = mean + zUpper * stddev;
+
+                // Calculate Z₀
+                const z0 = (x0 - mean) / stddev;
+
+                // Update plots
+                plotStandardNormal(zLower, zUpper, z0);
+                plotScaledNormal(mean, stddev, xLower, xUpper, x0);
+
+                // Update equations
+                updateEquations(mean, stddev, x0, z0);
+
+                // Update outputs
+                document.getElementById('output-standard').innerText = `Confidence Interval: ${(upperPercent - lowerPercent).toFixed(2)}%`;
+                document.getElementById('output-scaled').innerText = `Confidence Interval: ${(upperPercent - lowerPercent).toFixed(2)}%`;
+
+                // Update table
+                updateCombinedTable(mean, stddev, zLower, zUpper, z0, minZ, maxZ);
+            }
+
+            function plotStandardNormal(zLower, zUpper, z0) {
+                const xValues = [];
+                const yValues = [];
+                for (let x = -4; x <= 4; x += 0.01) {
+                    xValues.push(x);
+                    yValues.push(jStat.normal.pdf(x, 0, 1));
+                }
+
+                const trace = {
+                    x: xValues,
+                    y: yValues,
+                    type: 'scatter',
+                    mode: 'lines',
+                    name: 'Standard Normal Distribution',
+                    line: { color: 'blue' }
+                };
+
+                // Shaded area between zLower and zUpper
+                const shadedX = [];
+                const shadedY = [];
+                const step = 0.01;
+                let start = zLower;
+                let end = zUpper;
+
+                if (lowerInput.value == 0) {
+                    start = -4;
+                }
+                if (upperInput.value == 100) {
+                    end = 4;
+                }
+
+                if (start === end) {
+                    start -= 0.0001;
+                    end += 0.0001;
+                }
+
+                for (let x = start; x <= end; x += step) {
+                    shadedX.push(x);
+                    shadedY.push(jStat.normal.pdf(x, 0, 1));
+                }
+
+                const shadedArea = {
+                    x: [...shadedX, end, start],
+                    y: [...shadedY, 0, 0],
+                    fill: 'toself',
+                    type: 'scatter',
+                    mode: 'lines',
+                    name: 'Confidence Interval',
+                    fillcolor: 'rgba(0, 100, 80, 0.2)',
+                    line: { color: 'transparent' }
+                };
+
+                // Z₀ line
+                const z0Line = {
+                    x: [z0, z0],
+                    y: [0, jStat.normal.pdf(z0, 0, 1)],
+                    type: 'scatter',
+                    mode: 'lines',
+                    name: 'Null Hypothesis (Z₀)',
+                    line: { color: 'red', dash: 'dashdot' }
+                };
+
+                const data = [trace, shadedArea, z0Line];
+
+                const layout = {
+                    xaxis: { title: 'Z', range: [-4, 4] },
+                    yaxis: { title: 'Probability Density' },
+                    showlegend: false
+                };
+
+                Plotly.react('plot-standard', data, layout);
+            }
+
+            function plotScaledNormal(mean, stddev, xLower, xUpper, x0) {
+                const xValues = [];
+                const yValues = [];
+                const minX = mean - 4 * stddev;
+                const maxX = mean + 4 * stddev;
+                const step = (maxX - minX) / 800;
+                for (let x = minX; x <= maxX; x += step) {
+                    xValues.push(x);
+                    yValues.push(jStat.normal.pdf(x, mean, stddev));
+                }
+
+                const trace = {
+                    x: xValues,
+                    y: yValues,
+                    type: 'scatter',
+                    mode: 'lines',
+                    name: 'Scaled Normal Distribution',
+                    line: { color: 'blue' }
+                };
+
+                // Shaded area between xLower and xUpper
+                const shadedX = [];
+                const shadedY = [];
+                let start = xLower;
+                let end = xUpper;
+                const shadedStep = (maxX - minX) / 800;
+
+                if (lowerInput.value == 0) {
+                    start = minX;
+                }
+                if (upperInput.value == 100) {
+                    end = maxX;
+                }
+
+                if (start === end) {
+                    start -= 0.0001;
+                    end += 0.0001;
+                }
+
+                for (let x = start; x <= end; x += shadedStep) {
+                    shadedX.push(x);
+                    shadedY.push(jStat.normal.pdf(x, mean, stddev));
+                }
+
+                const shadedArea = {
+                    x: [...shadedX, end, start],
+                    y: [...shadedY, 0, 0],
+                    fill: 'toself',
+                    type: 'scatter',
+                    mode: 'lines',
+                    name: 'Confidence Interval',
+                    fillcolor: 'rgba(0, 100, 80, 0.2)',
+                    line: { color: 'transparent' }
+                };
+
+                // X₀ line
+                const x0Line = {
+                    x: [x0, x0],
+                    y: [0, jStat.normal.pdf(x0, mean, stddev)],
+                    type: 'scatter',
+                    mode: 'lines',
+                    name: 'Null Hypothesis (X₀)',
+                    line: { color: 'red', dash: 'dashdot' }
+                };
+
+                const data = [trace, shadedArea, x0Line];
+
+                const layout = {
+                    xaxis: { title: 'X', range: [minX, maxX] },
+                    yaxis: { title: 'Probability Density' },
+                    showlegend: false
+                };
+
+                Plotly.react('plot-scaled', data, layout);
+            }
+
+            function updateEquations(mean, stddev, x0, z0) {
+                // Standard Normal Equation with Z₀ on its own line
+                const eqStandard = `\\[
+                    f(z) = \\frac{1}{\\sqrt{2\\pi}} e^{-\\frac{z^2}{2}}
+                \\]
+                \\[
+                    Z_0 = ${z0.toFixed(4)}
+                \\]`;
+
+                // Scaled Normal Equation with X₀ on its own line
+                const eqScaledVars = `\\[
+                    f(x) = \\frac{1}{${stddev.toFixed(2)} \\sqrt{2\\pi}} e^{-\\frac{(x - ${mean.toFixed(2)})^2}{2 \\times ${stddev.toFixed(2)}^2}}
+                \\]
+                \\[
+                    X_0 = ${x0.toFixed(4)}
+                \\]`;
+
+                // Corrected T-statistic
+                const tStatistic = (mean - x0) / stddev;
+                const eqTStatScaled = `\\[
+                    t = \\frac{m - X_0}{SE} = \\frac{${mean.toFixed(2)} - ${x0.toFixed(2)}}{${stddev.toFixed(2)}} = ${tStatistic.toFixed(4)}
+                \\]`;
+
+                document.getElementById('equation-standard').innerHTML = eqStandard;
+                document.getElementById('equation-scaled').innerHTML = eqScaledVars + eqTStatScaled;
+
+                // Render equations with MathJax
+                MathJax.typesetPromise();
+            }
+
+            function updateCombinedTable(mean, stddev, zLower, zUpper, z0, minZ, maxZ) {
+                const table = document.getElementById('table-combined');
+                table.innerHTML = ''; // Clear previous content
+
+                // Create header row
+                const header = table.createTHead().insertRow();
+                header.insertCell().innerHTML = '<strong>Z</strong>';
+                for (let col = 0.00; col <= 0.09; col += 0.01) {
+                    header.insertCell().innerHTML = `<strong>${col.toFixed(2)}</strong>`;
+                }
+
+                const tbody = table.createTBody();
+
+                // Determine the range for negative, zero, and positive Z-values
+                const zStart = Math.min(minZ, maxZ);
+                const zEnd = Math.max(minZ, maxZ);
+
+                // Negative Z-values
+                for (let zInt = Math.min(-0.0, zStart); zInt <= -0.1 && zInt <= zEnd; zInt += 0.1) {
+                    const zIntFixed = parseFloat(zInt.toFixed(1));
+                    const row = tbody.insertRow();
+                    row.insertCell().innerText = zIntFixed.toFixed(1);
+
+                    for (let zDec = 0.00; zDec <= 0.09; zDec += 0.01) {
+                        const zValue = parseFloat((zIntFixed - zDec).toFixed(2));
+                        if (zValue < zStart || zValue > zEnd) continue;
+                        const pZ = jStat.normal.cdf(zValue, 0, 1);
+                        const cell = row.insertCell();
+                        cell.innerText = pZ.toFixed(6);
+
+                        // Highlight cells
+                        if (
+                            Math.abs(zValue - zLower) < 0.005 ||
+                            Math.abs(zValue - zUpper) < 0.005 ||
+                            Math.abs(zValue - z0) < 0.005
+                        ) {
+                            cell.classList.add('highlight');
+                        }
+                    }
+                }
+
+                // Z = -0.0 row
+                if (zStart <= -0.0 && zEnd >= -0.0) {
+                    const zIntFixed = -0.0;
+                    const row = tbody.insertRow();
+                    row.insertCell().innerText = '-0.0';
+
+                    for (let zDec = 0.00; zDec <= 0.09; zDec += 0.01) {
+                        const zValue = parseFloat((-0.0 - zDec).toFixed(2));
+                        if (zValue < zStart || zValue > zEnd) continue;
+                        const pZ = jStat.normal.cdf(zValue, 0, 1);
+                        const cell = row.insertCell();
+                        cell.innerText = pZ.toFixed(6);
+
+                        // Highlight cells
+                        if (
+                            Math.abs(zValue - zLower) < 0.005 ||
+                            Math.abs(zValue - zUpper) < 0.005 ||
+                            Math.abs(zValue - z0) < 0.005
+                        ) {
+                            cell.classList.add('highlight');
+                        }
+                    }
+                }
+
+                // Z = 0.0 row
+                if (zStart <= 0.0 && zEnd >= 0.0) {
+                    const zIntFixed = 0.0;
+                    const row = tbody.insertRow();
+                    row.insertCell().innerText = '0.0';
+
+                    for (let zDec = 0.00; zDec <= 0.09; zDec += 0.01) {
+                        const zValue = parseFloat((zIntFixed + zDec).toFixed(2));
+                        if (zValue < zStart || zValue > zEnd) continue;
+                        const pZ = jStat.normal.cdf(zValue, 0, 1);
+                        const cell = row.insertCell();
+                        cell.innerText = pZ.toFixed(6);
+
+                        // Highlight cells
+                        if (
+                            Math.abs(zValue - zLower) < 0.005 ||
+                            Math.abs(zValue - zUpper) < 0.005 ||
+                            Math.abs(zValue - z0) < 0.005
+                        ) {
+                            cell.classList.add('highlight');
+                        }
+                    }
+                }
+
+                // Positive Z-values
+                for (let zInt = 0.1; zInt <= zEnd; zInt += 0.1) {
+                    if (zInt < zStart) continue;
+                    const zIntFixed = parseFloat(zInt.toFixed(1));
+                    const row = tbody.insertRow();
+                    row.insertCell().innerText = zIntFixed.toFixed(1);
+
+                    for (let zDec = 0.00; zDec <= 0.09; zDec += 0.01) {
+                        const zValue = parseFloat((zIntFixed + zDec).toFixed(2));
+                        if (zValue < zStart || zValue > zEnd) continue;
+                        const pZ = jStat.normal.cdf(zValue, 0, 1);
+                        const cell = row.insertCell();
+                        cell.innerText = pZ.toFixed(6);
+
+                        // Highlight cells
+                        if (
+                            Math.abs(zValue - zLower) < 0.005 ||
+                            Math.abs(zValue - zUpper) < 0.005 ||
+                            Math.abs(zValue - z0) < 0.005
+                        ) {
+                            cell.classList.add('highlight');
+                        }
+                    }
+                }
+            }
+
+            // Initial update
+            updateAll();
+        });
+    </script>
+</body>
+</html>
