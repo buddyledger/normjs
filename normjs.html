@@ -312,12 +312,16 @@
             }
 
             function updateEquations(mean, stddev, x0, z0) {
+		const tStatistic = (mean - x0) / stddev;
                 // Standard Normal Equation with Z₀ on its own line
                 const eqStandard = `\\[
                     f(z) = \\frac{1}{\\sqrt{2\\pi}} e^{-\\frac{z^2}{2}}
                 \\]
                 \\[
                     Z_0 = ${z0.toFixed(4)}
+                \\]
+		\\[
+                    t = ${tStatistic.toFixed(4)}
                 \\]`;
 
                 // Scaled Normal Equation with X₀ on its own line
@@ -329,7 +333,6 @@
                 \\]`;
 
                 // Corrected T-statistic
-                const tStatistic = (mean - x0) / stddev;
                 const eqTStatScaled = `\\[
                     t = \\frac{m - X_0}{SE} = \\frac{${mean.toFixed(2)} - ${x0.toFixed(2)}}{${stddev.toFixed(2)}} = ${tStatistic.toFixed(4)}
                 \\]`;
