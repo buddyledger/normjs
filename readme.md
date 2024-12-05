@@ -1,3 +1,3 @@
 # **Normjs**
 
-[Click here to visit the website](https://example.com)
+https://buddyledger.github.io/normjs/
